@@ -8,12 +8,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Статусы посылки.
 const (
 	ParcelStatusRegistered = "registered"
 	ParcelStatusSent       = "sent"
 	ParcelStatusDelivered  = "delivered"
 )
 
+// Parcel - структура, содержащая информацию о посылке, поля которой соответствуют
+// атрибутам таблицы базы данных.
 type Parcel struct {
 	Number    int
 	Client    int
@@ -22,14 +25,19 @@ type Parcel struct {
 	CreatedAt string
 }
 
+// ParcelService является оберткой над структурой ParcelStore, работающей с базой данных.
 type ParcelService struct {
 	store ParcelStore
 }
 
+// NewParcelService создает новый объект типа ParcelService.
 func NewParcelService(store ParcelStore) ParcelService {
 	return ParcelService{store: store}
 }
 
+// Register принимает на вход идентификатор клиента и адрес доставки, из которых генерирует
+// новый элемент типа Parcel, который добавляет в базу данных и выводит информацию о нём на консоль.
+// Возвращает сгенерированный элемент типа Parcel и возможную ошибку.
 func (s ParcelService) Register(client int, address string) (Parcel, error) {
 	parcel := Parcel{
 		Client:    client,
@@ -38,11 +46,13 @@ func (s ParcelService) Register(client int, address string) (Parcel, error) {
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
+	// добавляем новую посылку в таблицу базы данных
 	id, err := s.store.Add(parcel)
 	if err != nil {
 		return parcel, err
 	}
 
+	// заполняем поле идентификатора посылки, сгенерированное таблицой базы данных
 	parcel.Number = id
 
 	fmt.Printf("Новая посылка № %d на адрес %s от клиента с идентификатором %d зарегистрирована %s\n",
@@ -51,6 +61,8 @@ func (s ParcelService) Register(client int, address string) (Parcel, error) {
 	return parcel, nil
 }
 
+// PrintClientParcels формирует и выводит на консоль список посылок по указанному
+// идентификатору клиента из базы данных. Возвращает возможную ошибку.
 func (s ParcelService) PrintClientParcels(client int) error {
 	parcels, err := s.store.GetByClient(client)
 	if err != nil {
@@ -67,6 +79,8 @@ func (s ParcelService) PrintClientParcels(client int) error {
 	return nil
 }
 
+// NextStatus меняет статус посылки в базе данных по указанному идентификатору.
+// Выводит новый статус посылки на консоль. Возвращает возможную ошибку.
 func (s ParcelService) NextStatus(number int) error {
 	parcel, err := s.store.Get(number)
 	if err != nil {
@@ -76,11 +90,11 @@ func (s ParcelService) NextStatus(number int) error {
 	var nextStatus string
 	switch parcel.Status {
 	case ParcelStatusRegistered:
-		nextStatus = ParcelStatusSent
+		nextStatus = ParcelStatusSent // если статус "registered", поменять на "sent"
 	case ParcelStatusSent:
-		nextStatus = ParcelStatusDelivered
+		nextStatus = ParcelStatusDelivered // если статус "sent", поменять на "delivered"
 	case ParcelStatusDelivered:
-		return nil
+		return nil // если статус "delivered", поменять на nil
 	}
 
 	fmt.Printf("У посылки № %d новый статус: %s\n", number, nextStatus)
@@ -88,18 +102,29 @@ func (s ParcelService) NextStatus(number int) error {
 	return s.store.SetStatus(number, nextStatus)
 }
 
+// ChangeAddress меняет адрес посылки в базе данных на указанный по указанному идентификатору.
+// Возвращает возможную ошибку.
 func (s ParcelService) ChangeAddress(number int, address string) error {
 	return s.store.SetAddress(number, address)
 }
 
+// Delete удаляет посылку из базы данных по указанному идентификатору.
+// Возвращает возможную ошибку.
 func (s ParcelService) Delete(number int) error {
 	return s.store.Delete(number)
 }
 
 func main() {
-	// настройте подключение к БД
+	// соединяемся с базой данных
+	db, err := sql.Open("sqlite", "tracker.db")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer db.Close()
 
-	store := // создайте объект ParcelStore функцией NewParcelStore
+	// создаем объекты для работы с базой данных
+	store := NewParcelStore(db)
 	service := NewParcelService(store)
 
 	// регистрация посылки
